@@ -51,6 +51,34 @@ public:
     }
 };
 
+class MotorPair {
+private:
+    MotorDC& motor1; // Referencia al primer motor
+    MotorDC& motor2; // Referencia al segundo motor
+
+public:
+    // Constructor: inicializa el par de motores
+    MotorPair(MotorDC& m1, MotorDC& m2) : motor1(m1), motor2(m2) {}
+
+    // Método para mover ambos motores hacia adelante
+    void moveForward(int speed, bool verbose = false) {
+        motor1.moveForward(speed, verbose);
+        motor2.moveForward(speed, verbose);
+    }
+
+    // Método para mover ambos motores hacia atrás
+    void moveBackward(int speed, bool verbose = false) {
+        motor1.moveBackward(speed, verbose);
+        motor2.moveBackward(speed, verbose);
+    }
+
+    // Método para detener ambos motores
+    void stop(bool verbose = false) {
+        motor1.stop(verbose);
+        motor2.stop(verbose);
+    }
+};
+
 class UltrasonicHCSR04 {
 private:
     int triggerPin;  // Pin de trigger
@@ -109,7 +137,7 @@ public:
     }
 
     // Método para leer datos de aceleración
-    void readAcceleration(float &ax, float &ay, float &az, bool verbose = false) {
+    void readAcceleration(int16_t &ax, int16_t &ay, int16_t &az, bool verbose = false) {
         mpu.getAcceleration(&ax, &ay, &az); // Leer datos de aceleración
         if (verbose) {
             Serial.print(name);
@@ -124,7 +152,7 @@ public:
     }
 
     // Método para leer datos de giroscopio
-    void readGyroscope(float &gx, float &gy, float &gz, bool verbose = false) {
+    void readGyroscope(int16_t &gx, int16_t &gy, int16_t &gz, bool verbose = false) {
         mpu.getRotation(&gx, &gy, &gz); // Leer datos de giroscopio
         if (verbose) {
             Serial.print(name);
@@ -141,8 +169,8 @@ public:
 
 class SensorQTR8 {
 private:
-    QTRSensorsRC qtr;
-    unsigned char sensorPins[8]; // Pines de los sensores
+    QTRSensors qtr;
+    int sensorPins[8]; // Pines de los sensores
     String name;             // Nombre del sensor para debug
     int numSensors;          // Número de sensores QTR utilizados
 
@@ -151,11 +179,11 @@ private:
 
 public:
     // Constructor que inicializa los pines y el nombre del sensor
-    SensorQTR8(unsigned char pins[], int num, String sensorName) : numSensors(num), name(sensorName) {
+    SensorQTR8(int pins[], int num, String sensorName) : numSensors(num), name(sensorName) {
         for (int i = 0; i < numSensors; i++) { // Copiar los pines a sensorPins
             sensorPins[i] = pins[i];
         }
-        qtr.init(sensorPins, numSensors); // Inicializar el sensor con los pines dados
+        //qtr.init(sensorPins, numSensors); // Inicializar el sensor con los pines dados
     }
 
     // Método para calibrar el sensor
@@ -189,13 +217,31 @@ public:
 
     // Método para obtener la posición de la línea (de 0 a 7000)
     int readLinePosition(bool verbose = false) {
-        int position = qtr.readLine(sensorValues); // Leer la posición de la línea, indica si esta más a la izquierda o más a la derecha
+        qtr.read(sensorValues); // Llamada al método que lee los sensores y almacena los valores en el arreglo sensorValues
+
+        // Procesar los valores de los sensores para calcular la posición de la línea
+        int weightedSum = 0;
+        int totalValue = 0;
+
+        for (int i = 0; i < numSensors; i++) {
+            weightedSum += sensorValues[i] * i; // Multiplicamos el valor por el índice como peso
+            totalValue += sensorValues[i];
+        }
+
+        int position;
+        if (totalValue > 0) {
+            // Calcula la posición ponderada de la línea
+            position = weightedSum / totalValue;
+        } else {
+            // Si no hay señal, devuelve un valor fuera del rango
+            position = -1;
+        }
 
         if (verbose) {
-            Serial.print(name);
-            Serial.print(" line position: ");
+            Serial.print("Posición de la línea: ");
             Serial.println(position);
         }
+
         return position;
     }
 

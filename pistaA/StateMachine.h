@@ -2,9 +2,6 @@
 #ifndef STATEMACHINE_H
 #define STATEMACHINE_H
 
-int currentMapSide = 1; // La pista se divide en 4 lados, esta variable es el lado de la pista actual
-int baseSpeed = 255; // Velocidad
-
 // Definición de estados
 enum State {
     START,
@@ -20,28 +17,33 @@ private:
     void phaseStart();
     void phaseFetchBall();
     void phaseGrabBall();
-    void phaseSearchExit();
+    void phaseFetchExit();
     void phaseFinish();
 
 public:
     StateMachine() : currentState(START) {} // Constructor de la clase
 
     // Controlador de estados
-    void loop() {
+    void run() {
         switch (currentState) {
             case START:
+                Serial.println("Iniciando fase START");
                 phaseStart();
                 break;
             case FETCH_BALL:
+                Serial.println("Iniciando fase FETCH BALL");
                 phaseFetchBall();
                 break;
             case GRAB_BALL:
+                Serial.println("Iniciando fase GRAB BALL");
                 phaseGrabBall();
                 break;
             case FETCH_EXIT:
-                phaseSearchExit();
+                Serial.println("Iniciando fase FETCH EXIT");
+                phaseFetchExit();
                 break;
             case FINISH:
+                Serial.println("Iniciando fase FINISH");
                 phaseFinish();
                 break;
         }

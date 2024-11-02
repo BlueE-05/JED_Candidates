@@ -1,8 +1,11 @@
 // ._. || Pista A (Laberinto con la pelota)
 #include "StateMachine.h"
 #include "Functions.h"
+#include <Servo.h>
 
+//* ----------------------------------------------
 //* Declaración de sensores
+//* ----------------------------------------------
 // 4 motores en el motor shield MH Electronics V1
 MotorDC motorA1(1, "Motor Izq 1");
 MotorDC motorA2(2, "Motor Izq 2");
@@ -28,15 +31,25 @@ ColorTCS3200 color_Sensor(28, 29, 30, 31, 32, "Sensor Color");
 int pinsQTR[] = {33, 34, 35, 36};
 SensorQTR8 qtr_Sensor(pinsQTR, 4, "Linea QTR");
 
+// Servos para la garra
+Servo servo1;
+Servo servo2;
+int servo_val = 90; //ángulo en grados para levantar la garra
+float dist_enter = 5.0; //distancia que debe avanzar para entrar al cuadrado interno
+
 // Instanciar maquina de estados
 StateMachine stateMachine;
 
 
 
+//* ----------------------------------------------
 //* Ejecución del código
+//* ----------------------------------------------
 void setup() {
     Serial.begin(9600);
     mpu.begin();
+    servo1.attach(9);
+    servo2.attach(10);
 }
 
 void loop() {
@@ -45,7 +58,9 @@ void loop() {
 
 
 
+//* ----------------------------------------------
 //* Definición de métodos de la máquina de estados
+//* ----------------------------------------------
 // Método para entrar a la pista
 void StateMachine::phaseStart(){
     float startingDistance = us_Front.getDistance(); // leer distancia inicial para avanzar 30cm/1 cuadro
@@ -103,62 +118,72 @@ void StateMachine::phaseFetchBall(){
     }
 }
 
-
-
-//!!! Método para tomar la pelota y sacarla del cuadrado interno
+// Método para tomar la pelota y sacarla del cuadrado interno
 void StateMachine::phaseGrabBall(){
     rotate(motorA, motorB, mpu, direction); // Girar para quedar frente a la pelota
-    //servos up
-    int initialDist = us_Front.getDistance(); //!hacer pruebas para ver si no se traba
-    /*while(us_Front.getDistance){} //! cambiar a que mida la dist con el mpu pq la garra le estorba
+    // servos up
+    servo1.write(servo_val);
+    servo2.write(-servo_val);
+    int initialDist = us_Front.getDistance();
+    while(us_Front.getDistance() > (initialDist - dist_enter)){
         motorA.moveForward(baseSpeed);
-        motorB.moveForward(baseSpeed);}
-    //servos down
-    
-    rotate(motorA, motorB, mpu, !direction); // regresar a la posición inicial*/
+        motorB.moveForward(baseSpeed);
+    }
+    // servos down
+    servo1.write(0);
+    servo2.write(0);
+    while(us_Front.getDistance() < (initialDist - dist_enter)){
+        motorA.moveBackward(baseSpeed);
+        motorB.moveBackward(baseSpeed);
+    }
+    rotate(motorA, motorB, mpu, !direction); // regresar a la posición inicial
 
-
-
-    if(currentMapSide == 3)
+    // Preparaciones para la siguiente fase
+    if(currentMapSide == 3){
+        rotate(motorA, motorB, mpu, direction); // quedar frente a la salida
         currentState = FINISH;
-    else if( (!direction && currentMapSide == 4) || ) //!!!
+    } else if(!direction || currentMapSide == 4){
         changeDirection(motorA, motorB, mpu, direction);
-    
+    }
+
     currentState = FETCH_EXIT;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-//!!! Método para recorrer las paredes para encontrar la salida
+// Método para recorrer las paredes para encontrar la salida
 void StateMachine::phaseFetchExit(){
-    if(currentMapSide == 3)
+    bool blackLine = false;
+    center(motorA, motorB, us_Front, qtr_Sensor, mpu, direction);
+    if(currentMapSide == 4){
+        rotate(motorA, motorB, mpu, direction);
         currentState = FINISH;
+    }
+    // Si aun no se encuentra en el lado 3
+    while(us_Front.getDistance() > frontThreshold && !blackLine){
+        motorA.moveForward(baseSpeed);
+        motorB.moveForward(baseSpeed);
+        
+        if(qtr_Sensor.readAny()){ // Si detecta una línea en el suelo, cambiar la dirección y continuar recorrido
+            motorA.stop();
+            motorB.stop();
+            blackLine = true;
+        }
+    }
+    // Girar en la esquina o girar 180 para cambiar de dirección
+    if(blackLine)
+        changeDirection(motorA, motorB, mpu, direction);
+    else{
+        rotate(motorA, motorB, mpu, direction);
 
-    
+        // Actualizar el lado de la pista en la que se encuentra el robot
+        currentMapSide += step;
+        if(currentMapSide < 1){
+            currentMapSide = 4;
+        }
+        if(currentMapSide > 4){
+            currentMapSide = 1;
+        }
+    }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Método para salir de la pista
 void StateMachine::phaseFinish(){
